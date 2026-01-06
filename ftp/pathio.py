@@ -70,6 +70,8 @@ class MongoDBMemoryIO:
         self.offset = 0
         self.safe_name = f"{uuid4().hex}_{node.name}"
         self.local_path = os.path.join(CACHE_DIR, self.safe_name)
+        # Usa .partial para escrita atômica (Folder Watcher ignora .partial)
+        self.temp_path = self.local_path + ".partial"
 
     async def __aenter__(self): return self
     async def __aexit__(self, *args, **kwargs): pass
@@ -78,8 +80,9 @@ class MongoDBMemoryIO:
     async def write_stream(self, stream):
         try:
             # Garante que a pasta staging exista
-            os.makedirs(os.path.dirname(self.local_path), exist_ok=True)
-            async with aiofiles.open(self.local_path, "wb") as f:
+            os.makedirs(os.path.dirname(self.temp_path), exist_ok=True)
+            # Escreve no arquivo temporário (.partial)
+            async with aiofiles.open(self.temp_path, "wb") as f:
                 if self.offset > 0: await f.seek(self.offset)
                 async for data in stream.iter_by_block(1024*1024):
                     await f.write(data)
@@ -87,7 +90,14 @@ class MongoDBMemoryIO:
         except Exception as e:
             logger.error(f"❌ [WRITE] Erro disco: {e}"); raise
 
-        final_size = os.path.getsize(self.local_path)
+        try:
+            final_size = os.path.getsize(self.temp_path)
+            # Rename atômico para o nome final
+            os.rename(self.temp_path, self.local_path)
+        except Exception as e:
+            logger.error(f"❌ [WRITE] Erro ao finalizar arquivo: {e}")
+            raise
+
         parent = self._node.parent
         name = self._node.name
         cache_key = f"{parent}::{name}"
