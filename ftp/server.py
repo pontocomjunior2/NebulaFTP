@@ -395,6 +395,31 @@ class Server:
             s = strftime("%b %e %H:%M", mtime) if time() - 15778476 < stats.st_mtime <= time() else strftime("%b %e  %Y", mtime)
         return " ".join((filemode(stats.st_mode), str(stats.st_nlink), "none", "none", str(stats.st_size), s, path.name))
 
+    @ConnectionConditions(ConnectionConditions.login_required, ConnectionConditions.passive_server_started)
+    @PathConditions(PathConditions.path_must_exists)
+    @PathPermissions(PathPermissions.readable)
+    async def mlsd(self, conn, rest):
+        @ConnectionConditions(ConnectionConditions.data_connection_made, wait=True, fail_code="425")
+        @worker
+        async def mlsd_worker(self, conn, rest):
+            stream = conn.data_connection; del conn.data_connection
+            async with stream:
+                async for path in conn.path_io.list(real):
+                    s = await self.build_mlsd_string(conn, path)
+                    await stream.write((s + "\r\n").encode("utf-8"))
+            conn.response("226", "done"); return True
+            
+        real, virt = self.get_paths(conn, rest)
+        t = create_task(mlsd_worker(self, conn, rest)); conn.extra_workers.add(t)
+        conn.response("150", "listing"); return True
+
+    async def build_mlsd_string(self, conn, path):
+        stats = await conn.path_io.stat(path)
+        t = gmtime(stats.st_mtime)
+        modify = strftime("%Y%m%d%H%M%S", t)
+        type_ = "dir" if (stats.st_mode & 0o40000) else "file"
+        return f"type={type_};size={stats.st_size};modify={modify}; {path.name}"
+
     @ConnectionConditions(ConnectionConditions.login_required)
     @PathConditions(PathConditions.path_must_exists)
     @PathPermissions(PathPermissions.readable)
@@ -492,7 +517,8 @@ class Server:
                     try:
                         sock = socket.socket(AF_INET, socket.SOCK_STREAM)
                         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                        sock.bind((conn.server_host, port))
+                        # FORCE BIND TO 0.0.0.0 to ensure Docker mapping works
+                        sock.bind(("0.0.0.0", port))
                         sock.listen(5)
                         break
                     except OSError:
@@ -537,4 +563,4 @@ class Server:
     async def rnto(self, c, r):
         real, virt = self.get_paths(c, r); rename = c.rename_from; del c.rename_from
         await c.path_io.rename(rename, real); c.response("250", "renamed"); return True
-    async def mlsd(self, c, r): return await self.list(c, r)
+
