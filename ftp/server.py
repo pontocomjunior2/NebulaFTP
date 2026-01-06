@@ -32,7 +32,7 @@ class User:
         self.base_path = Path("."); self.home_path = PurePosixPath(f"/{login}")
         self.permissions = [Permission(f"/{login}", readable=True, writable=True)] + permissions
         if not [p for p in self.permissions if p.path == PurePosixPath("/")]:
-            self.permissions.append(Permission("/", readable=False, writable=False))
+            self.permissions.append(Permission("/", readable=True, writable=False))
     def get_permissions(self, path):
         path = PurePosixPath(path)
         parents = filter(lambda p: p.is_parent(path), self.permissions)
