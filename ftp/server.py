@@ -7,7 +7,11 @@ from socket import AF_INET, AF_INET6
 import socket
 from stat import filemode
 from time import strftime, gmtime, time, localtime
+import logging
 import unicodedata # <--- Importante para normalização de nomes
+
+logger = logging.getLogger("NebulaFTP")
+
 
 from .errors import PathIOError, NoAvailablePort
 from .pathio import PathIONursery
@@ -274,6 +278,11 @@ class Server:
                     try: res = task.result()
                     except PathIOError: conn.response("451", "fs error"); continue
                     except ConnectionResetError: return
+                    except Exception as e:
+                        import traceback
+                        logger.error(f"❌ [Dispatcher] Task Error: {e}\n{traceback.format_exc()}")
+                        conn.response("451", f"Internal Error: {e}")
+                        continue
                     if isinstance(res, bool):
                         if not res: await queue.join(); return
                     elif isinstance(res, tuple):
@@ -285,7 +294,9 @@ class Server:
                             if cmd not in ("retr", "stor", "appe"): conn.restart_offset = 0
                         else: conn.response("502", "not implemented")
         except CancelledError: raise
-        except Exception: pass
+        except Exception as e:
+            import traceback
+            logger.error(f"❌ [Dispatcher] Critical: {e}\n{traceback.format_exc()}")
         finally:
             tasks = []
             if not get_running_loop().is_closed():
