@@ -3,17 +3,21 @@ services:
     build: .
     container_name: nebula_ftp
     restart: unless-stopped
-    # MÁGICA AQUI: Usamos a rede do host. O container age como um processo normal na VPS.
-    # Sem problemas de NAT, sem problemas de portas passivas.
-    network_mode: host
+    # Para ambientes sem network_mode: host (ex: EasyPanel), configure:
+    # - FTP_PASV_PORTS no .env (ex: 60000-60100)
+    # - FTP_MASQUERADE_ADDRESS no .env com o IP público do servidor
+    ports:
+      - "${PORT:-2121}:2121"                    # Porta FTP de controle
+      - "60000-60100:60000-60100"              # Range de portas passivas (ajuste conforme FTP_PASV_PORTS)
     volumes:
       - ./staging:/app/staging
       - ./FTP_Bot.session:/app/FTP_Bot.session
       - ./nebula.log:/app/nebula.log
       - ./.env:/app/.env
     environment:
-      # Como estamos no modo host, o container vê o mongo na porta local
-      - MONGODB=mongodb://127.0.0.1:27017
+      - MONGODB=mongodb://mongo:27017
+    env_file:
+      - .env
     depends_on:
       - mongo
 

@@ -193,6 +193,11 @@ Servidor FTP
 
 HOST=0.0.0.0
 PORT=2121
+
+# Para Docker sem network_mode: host (ex: EasyPanel)
+FTP_PASV_PORTS=60000-60100
+FTP_MASQUERADE_ADDRESS=SEU_IP_PUBLICO
+
 Performance
 
 MAX_WORKERS=4 # Workers de upload

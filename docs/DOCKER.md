@@ -162,6 +162,14 @@ MONGODB=mongodb://mongo:27017
 HOST=0.0.0.0
 PORT=2121
 
+# Para ambientes Docker sem network_mode: host (ex: EasyPanel)
+# Configure o range de portas passivas (formato: inicio-fim)
+FTP_PASV_PORTS=60000-60100
+
+# Configure o IP público do servidor (necessário para containers Docker)
+# Substitua pelo IP público do seu servidor
+FTP_MASQUERADE_ADDRESS=SEU_IP_PUBLICO_AQUI
+
 # ============= PERFORMANCE =============
 MAX_WORKERS=4
 CHUNK_SIZE_MB=64

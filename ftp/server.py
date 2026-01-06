@@ -171,12 +171,13 @@ class Server:
         self.masquerade_address = masquerade_address
         self.commands_mapping = {
             "abor": self.abor, "appe": self.appe, "cdup": self.cdup, "cwd": self.cwd,
-            "dele": self.dele, "epsv": self.epsv, "list": self.list, "mkd": self.mkd,
-            "mlsd": self.mlsd, "mlst": self.mlst, "pass": self.pass_, "pasv": self.pasv,
+            "dele": self.dele, "epsv": self.epsv, "feat": self.feat, "list": self.list, 
+            "mkd": self.mkd, "mdtm": self.mdtm, "mlsd": self.mlsd, "mlst": self.mlst, 
+            "opts": self.opts, "pass": self.pass_, "pasv": self.pasv,
             "pbsz": self.pbsz, "prot": self.prot, "pwd": self.pwd, "quit": self.quit,
             "rest": self.rest, "retr": self.retr, "rmd": self.rmd, "rnfr": self.rnfr,
-            "rnto": self.rnto, "stor": self.stor, "syst": self.syst, "type": self.type,
-            "user": self.user,
+            "rnto": self.rnto, "size": self.size, "stor": self.stor, "syst": self.syst, 
+            "type": self.type, "user": self.user,
         }
 
     async def start(self, host="0.0.0.0", port=9021, **kwargs):
@@ -438,6 +439,33 @@ class Server:
     async def pbsz(self, c, r): c.response("200", "ok"); return True
     async def prot(self, c, r): c.response("200", "ok"); return True
     async def syst(self, c, r): c.response("215", "UNIX Type: L8"); return True
+    
+    async def feat(self, c, r):
+        features = ["UTF8", "SIZE", "MDTM", "MLST type*;size*;modify*;perm*;unique*;unix.mode*;", "EPSV", "PASV"]
+        c.response("211", ["Features:", *features, "End"], True); return True
+
+    async def opts(self, c, r):
+        if r.upper().startswith("UTF8 ON"): c.response("200", "Always in UTF8 mode."); return True
+        c.response("501", "Option not understood"); return True
+
+    @ConnectionConditions(ConnectionConditions.login_required)
+    @PathConditions(PathConditions.path_must_exists, PathConditions.path_must_be_file)
+    @PathPermissions(PathPermissions.readable)
+    async def size(self, c, r):
+        real, virt = self.get_paths(c, r)
+        stats = await c.path_io.stat(real)
+        c.response("213", str(stats.st_size)); return True
+
+    @ConnectionConditions(ConnectionConditions.login_required)
+    @PathConditions(PathConditions.path_must_exists)
+    @PathPermissions(PathPermissions.readable)
+    async def mdtm(self, c, r):
+        # Retorna data de modificação no formato YYYYMMDDHHMMSS
+        real, virt = self.get_paths(c, r)
+        stats = await c.path_io.stat(real)
+        t = gmtime(stats.st_mtime)
+        c.response("213", strftime("%Y%m%d%H%M%S", t)); return True
+
     async def pasv(self, c, r): return await self._pasv_common(c, False)
     async def epsv(self, c, r): return await self._pasv_common(c, True)
     
