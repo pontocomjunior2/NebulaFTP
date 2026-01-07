@@ -503,7 +503,6 @@ class Server:
         c.response("213", strftime("%Y%m%d%H%M%S", t)); return True
 
     @ConnectionConditions(ConnectionConditions.login_required)
-    @PathConditions(PathConditions.path_must_exists, PathConditions.path_must_be_file)
     @PathPermissions(PathPermissions.writable)
     async def mfmt(self, c, r):
         # Define data de modificação: MFMT YYYYMMDDHHMMSS filename
@@ -521,6 +520,11 @@ class Server:
             c.response("501", "Invalid timestamp format"); return True
         
         real, virt = self.get_paths(c, path_str)
+        
+        # Verifica se existe no DB (não precisa existir fisicamente)
+        if not await c.path_io.exists(real):
+            c.response("550", "File not found in database"); return True
+        
         await c.path_io.set_mtime(real, new_mtime)
         c.response("213", f"Modify={timestamp_str}; {virt.name}"); return True
 
