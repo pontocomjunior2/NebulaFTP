@@ -176,8 +176,8 @@ class Server:
         self.commands_mapping = {
             "abor": self.abor, "appe": self.appe, "cdup": self.cdup, "cwd": self.cwd,
             "dele": self.dele, "epsv": self.epsv, "feat": self.feat, "list": self.list, 
-            "mkd": self.mkd, "mdtm": self.mdtm, "mlsd": self.mlsd, "mlst": self.mlst, 
-            "opts": self.opts, "pass": self.pass_, "pasv": self.pasv,
+            "mfmt": self.mfmt, "mkd": self.mkd, "mdtm": self.mdtm, "mlsd": self.mlsd, 
+            "mlst": self.mlst, "opts": self.opts, "pass": self.pass_, "pasv": self.pasv,
             "pbsz": self.pbsz, "prot": self.prot, "pwd": self.pwd, "quit": self.quit,
             "rest": self.rest, "retr": self.retr, "rmd": self.rmd, "rnfr": self.rnfr,
             "rnto": self.rnto, "size": self.size, "stor": self.stor, "syst": self.syst, 
@@ -477,7 +477,7 @@ class Server:
     async def syst(self, c, r): c.response("215", "UNIX Type: L8"); return True
     
     async def feat(self, c, r):
-        features = ["UTF8", "SIZE", "MDTM", "MLST type*;size*;modify*;perm*;unique*;unix.mode*;", "EPSV", "PASV"]
+        features = ["UTF8", "SIZE", "MDTM", "MFMT", "MLST type*;size*;modify*;perm*;unique*;unix.mode*;", "EPSV", "PASV"]
         c.response("211", ["Features:", *features, "End"], True); return True
 
     async def opts(self, c, r):
@@ -501,6 +501,28 @@ class Server:
         stats = await c.path_io.stat(real)
         t = gmtime(stats.st_mtime)
         c.response("213", strftime("%Y%m%d%H%M%S", t)); return True
+
+    @ConnectionConditions(ConnectionConditions.login_required)
+    @PathConditions(PathConditions.path_must_exists, PathConditions.path_must_be_file)
+    @PathPermissions(PathPermissions.writable)
+    async def mfmt(self, c, r):
+        # Define data de modificação: MFMT YYYYMMDDHHMMSS filename
+        parts = r.split(None, 1)
+        if len(parts) != 2:
+            c.response("501", "Syntax: MFMT YYYYMMDDHHMMSS filename"); return True
+        
+        timestamp_str, path_str = parts
+        try:
+            # Parse timestamp YYYYMMDDHHMMSS
+            from time import mktime, strptime
+            t = strptime(timestamp_str, "%Y%m%d%H%M%S")
+            new_mtime = int(mktime(t))
+        except ValueError:
+            c.response("501", "Invalid timestamp format"); return True
+        
+        real, virt = self.get_paths(c, path_str)
+        await c.path_io.set_mtime(real, new_mtime)
+        c.response("213", f"Modify={timestamp_str}; {virt.name}"); return True
 
     async def pasv(self, c, r): return await self._pasv_common(c, False)
     async def epsv(self, c, r): return await self._pasv_common(c, True)

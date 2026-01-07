@@ -290,6 +290,32 @@ class MongoDBPathIO(AbstractPathIO):
         return MongoDBMemoryIO(node, mode, self.tg, self.db)
 
     @universal_exception
+    async def set_mtime(self, path, mtime):
+        \"\"\"Define a data de modificação de um arquivo\"\"\"
+        path = self._absolute(path)
+        parent, name = self._split_path(path)
+        cache_key = f\"{parent}::{name}\"
+        
+        # Atualiza no cache
+        async with self._cache_lock:
+            if cache_key in self._memory_cache:
+                self._memory_cache[cache_key][\"mtime\"] = mtime
+        
+        # Atualiza no DB
+        await self.db.files.update_one(
+            {\"name\": name, \"parent\": parent},
+            {\"$set\": {\"mtime\": mtime}}
+        )
+        
+        # Se existir arquivo local, atualiza também
+        node = await self.get_node(path)
+        if node and node.local_path and os.path.exists(node.local_path):
+            try:
+                os.utime(node.local_path, (mtime, mtime))
+            except:
+                pass  # Não é crítico se falhar
+    
+    @universal_exception
     async def rename(self, source, destination):
         source = self._absolute(source); destination = self._absolute(destination)
         # logger.info(f"🔄 [RENAME] {source} → {destination}")
