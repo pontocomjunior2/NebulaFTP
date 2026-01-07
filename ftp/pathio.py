@@ -291,20 +291,20 @@ class MongoDBPathIO(AbstractPathIO):
 
     @universal_exception
     async def set_mtime(self, path, mtime):
-        \"\"\"Define a data de modificação de um arquivo\"\"\"
+        """Define a data de modificação de um arquivo"""
         path = self._absolute(path)
         parent, name = self._split_path(path)
-        cache_key = f\"{parent}::{name}\"
+        cache_key = f"{parent}::{name}"
         
         # Atualiza no cache
         async with self._cache_lock:
             if cache_key in self._memory_cache:
-                self._memory_cache[cache_key][\"mtime\"] = mtime
+                self._memory_cache[cache_key]["mtime"] = mtime
         
         # Atualiza no DB
         await self.db.files.update_one(
-            {\"name\": name, \"parent\": parent},
-            {\"$set\": {\"mtime\": mtime}}
+            {"name": name, "parent": parent},
+            {"$set": {"mtime": mtime}}
         )
         
         # Se existir arquivo local, atualiza também
